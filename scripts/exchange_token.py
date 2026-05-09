@@ -40,7 +40,7 @@ def exchange(subject_token: str) -> dict:
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
             "subject_token": subject_token,
-            "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+            "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
             "subject_issuer": "vs2-idp",
             "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
             "audience": TARGET_AUDIENCE,

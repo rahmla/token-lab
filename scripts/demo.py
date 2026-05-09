@@ -120,7 +120,7 @@ def step3_token_exchange(subject_token: str) -> str:
     info(f"  grant_type        = urn:ietf:params:oauth:grant-type:token-exchange")
     info(f"  client_id         = {CLIENT_ID}")
     info(f"  subject_token     = <VS2-token>")
-    info(f"  subject_token_type = urn:…:access_token")
+    info(f"  subject_token_type = urn:…:jwt")
     info(f"  subject_issuer    = vs2-idp")
     info(f"  audience          = {AUDIENCE}")
 
@@ -128,9 +128,10 @@ def step3_token_exchange(subject_token: str) -> str:
     info("Keycloak gör nu:")
     info("  a) Slår upp IDP-alias 'vs2-idp'")
     info("  b) Kontrollerar IDP-behörighet  (realm-management authz) → PERMIT")
-    info("  c) Anropar VS2:s /userinfo med tokenet")
-    info("  d) VS2 verifierar signatur + issuer + exp → returnerar claims")
-    info("  e) KC slår upp KC-user via federated identity vs2-idp:123456")
+    info("  c) Hämtar VS2:s JWKS och verifierar JWT-signaturen lokalt")
+    info("     (KC 26 token-exchange:v2 — ingen UserInfo-anrop behövs)")
+    info("  d) Extraherar sub=123456 direkt ur JWT-payloaden")
+    info("  e) Slår upp KC-user via federated identity vs2-idp:123456")
     info("  f) Kontrollerar audience-behörighet (realm-management authz) → PERMIT")
     info("  g) Utfärdar nytt KC-token med aud=vs2-resource")
 
@@ -140,7 +141,7 @@ def step3_token_exchange(subject_token: str) -> str:
         "client_id":           CLIENT_ID,
         "client_secret":       CLIENT_SECRET,
         "subject_token":       subject_token,
-        "subject_token_type":  "urn:ietf:params:oauth:token-type:access_token",
+        "subject_token_type":  "urn:ietf:params:oauth:token-type:jwt",
         "subject_issuer":      "vs2-idp",
         "requested_token_type":"urn:ietf:params:oauth:token-type:access_token",
         "audience":            AUDIENCE,

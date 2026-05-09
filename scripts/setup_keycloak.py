@@ -146,9 +146,9 @@ def create_idp(token: str):
             "useJwksUrl": "true",
             "clientAuthMethod": "client_secret_post",
             "syncMode": "FORCE",
-            # Inaktivera discovery — vi anger JWKS direkt
-            "userInfoUrl": "http://jwks-server:9000/userinfo",
-            "disableUserInfoService": "false",
+            # KC 26 token-exchange:v2 validerar JWT-signaturen direkt mot JWKS.
+            # UserInfo behövs inte — VS2 är en token translator, inte en IdP med user store.
+            "disableUserInfoService": "true",
         },
     }
     status, resp = http(
