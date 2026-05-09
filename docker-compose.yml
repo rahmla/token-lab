@@ -1,0 +1,34 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: keycloak
+    command: start-dev --features=token-exchange,admin-fine-grained-authz --health-enabled=true
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8080
+    ports:
+      - "8080:8080"
+    networks:
+      - token-lab-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  jwks-server:
+    build:
+      context: ./jwks_server
+    container_name: jwks-server
+    ports:
+      - "9000:9000"
+    networks:
+      - token-lab-net
+    volumes:
+      - ./keys:/keys
+
+networks:
+  token-lab-net:
+    driver: bridge
