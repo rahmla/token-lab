@@ -36,37 +36,46 @@ Lokal labbmiljö som simulerar ett **F5-scenario** med extern Token Exchange (RF
 
 ```mermaid
 sequenceDiagram
-    participant VS2 as VS2 / extern IdP<br/>(:9000)
-    participant VS1 as VS1<br/>(F5 Resource Server)
-    participant KC  as Keycloak :8080<br/>realm: token-lab
-    participant BE  as Backend<br/>(litar på KC)
+    participant VS2 as VS2 / extern IdP :9000
+    participant VS1 as VS1 F5 Resource Server
+    participant KC as Keycloak :8080
+    participant BE as Backend
 
-    Note over VS2: RSA-nyckelpar, kid: vs2-key-1<br/>User: sub=123456 (löpnummer)
+    Note over VS2: RSA-nyckelpar kid=vs2-key-1
+    Note over VS2: sub=123456 (löpnummer)
 
-    VS1->>VS2: issue_token.py → JWT(iss=localhost:9000, sub=123456, RS256)
+    VS1->>VS2: Hämta VS2-JWT (sub=123456, RS256-signerad)
+    VS2-->>VS1: JWT (iss=localhost:9000)
 
-    VS1->>KC: POST /token<br/>grant_type: token-exchange<br/>client_id: vs1-client  client_secret: vs1-secret<br/>subject_token: &lt;VS2-JWT&gt;<br/>subject_token_type: access_token<br/>subject_issuer: vs2-idp<br/>audience: vs2-resource
+    VS1->>KC: POST /token grant_type=token-exchange
+    Note over VS1,KC: client_id=vs1-client, client_secret=vs1-secret
+    Note over VS1,KC: subject_token=VS2-JWT, subject_issuer=vs2-idp
+    Note over VS1,KC: audience=vs2-resource
 
-    Note over KC: 1. Autentiserar VS1 via client_secret<br/>2. Kontrollerar IDP-behörighet (realm-management)<br/>   → vs1-client → PERMIT
+    Note over KC: 1. Autentiserar VS1 via client_secret
+    Note over KC: 2. Kontrollerar IDP-behörighet i realm-management
 
-    KC->>VS2: GET /userinfo  Authorization: Bearer &lt;VS2-JWT&gt;
+    KC->>VS2: GET /userinfo Bearer VS2-JWT
+    Note over VS2: Verifierar RS256-signatur
+    Note over VS2: Kontrollerar exp och iss
+    VS2-->>KC: sub=123456
 
-    Note over VS2: Verifierar RS256-signatur<br/>Kontrollerar exp + iss<br/>Returnerar claims
+    Note over KC: 3. Slår upp KC-user via federated identity
+    Note over KC: vs2-idp:123456 = Alice Svensson
+    Note over KC: 4. Kontrollerar audience-behörighet
+    Note over KC: 5. Utfärdar KC-token med alla claims
 
-    VS2-->>KC: { sub: "123456" }
-
-    Note over KC: 3. Slår upp KC-user via federated identity<br/>   vs2-idp:123456 → Alice Svensson<br/>4. Kontrollerar audience-behörighet (realm-management)<br/>   → vs1-client får audience=vs2-resource → PERMIT<br/>5. Utfärdar KC-token med alla claims
-
-    KC-->>VS1: { access_token: &lt;KC-JWT&gt; }
+    KC-->>VS1: access_token (KC-signerad JWT)
 
     VS1->>BE: Anrop med KC-JWT
 
     BE->>KC: GET /realms/token-lab/protocol/openid-connect/certs
-    KC-->>BE: JWKS (publik nyckel)
+    KC-->>BE: JWKS
 
-    Note over BE: Verifierar RS256-signatur<br/>Kontrollerar iss, aud, exp<br/>Läser verifierade claims
-
-    Note over BE: employee_id=123456, name=Alice Svensson<br/>email, phone_number, roles=[Supervisor]<br/>aud=vs2-resource ✓
+    Note over BE: Verifierar RS256-signatur mot KC:s JWKS
+    Note over BE: Kontrollerar iss, aud, exp
+    Note over BE: employee_id=123456, name=Alice Svensson
+    Note over BE: roles=Supervisor, aud=vs2-resource
 ```
 
 ---
