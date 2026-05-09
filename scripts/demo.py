@@ -120,7 +120,7 @@ def step3_token_exchange(subject_token: str) -> str:
     info(f"  grant_type        = urn:ietf:params:oauth:grant-type:token-exchange")
     info(f"  client_id         = {CLIENT_ID}")
     info(f"  subject_token     = <VS2-token>")
-    info(f"  subject_token_type = urn:…:jwt")
+    info(f"  subject_token_type = urn:…:access_token")
     info(f"  subject_issuer    = vs2-idp")
     info(f"  audience          = {AUDIENCE}")
 
@@ -128,8 +128,7 @@ def step3_token_exchange(subject_token: str) -> str:
     info("Keycloak gör nu:")
     info("  a) Slår upp IDP-alias 'vs2-idp'")
     info("  b) Kontrollerar IDP-behörighet  (realm-management authz) → PERMIT")
-    info("  c) Hämtar VS2:s JWKS och verifierar JWT-signaturen lokalt")
-    info("     (KC 26 token-exchange:v2 — ingen UserInfo-anrop behövs)")
+    info("  c) Anropar VS2/F5 APM:s /userinfo med tokenet som Bearer")
     info("  d) Extraherar sub=123456 direkt ur JWT-payloaden")
     info("  e) Slår upp KC-user via federated identity vs2-idp:123456")
     info("  f) Kontrollerar audience-behörighet (realm-management authz) → PERMIT")
@@ -141,7 +140,7 @@ def step3_token_exchange(subject_token: str) -> str:
         "client_id":           CLIENT_ID,
         "client_secret":       CLIENT_SECRET,
         "subject_token":       subject_token,
-        "subject_token_type":  "urn:ietf:params:oauth:token-type:jwt",
+        "subject_token_type":  "urn:ietf:params:oauth:token-type:access_token",
         "subject_issuer":      "vs2-idp",
         "requested_token_type":"urn:ietf:params:oauth:token-type:access_token",
         "audience":            AUDIENCE,
@@ -266,7 +265,7 @@ def step4_backend_validate(kc_token: str):
 def main():
     print()
     print("╔══════════════════════════════════════════════════════════════════╗")
-    print("║        Token Exchange Lab — RFC 8693 med Keycloak 25            ║")
+    print("║        Token Exchange Lab — RFC 8693 med Keycloak 26            ║")
     print("╚══════════════════════════════════════════════════════════════════╝")
 
     vs2_token = step1_issue_vs2_token()

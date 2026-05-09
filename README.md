@@ -2,10 +2,12 @@
 
 Lokal labbmiljö som simulerar ett **F5-scenario** med extern Token Exchange (RFC 8693):
 
-1. En extern IdP utfärdar en SAML-assert (simuleras som att VS2 APM redan omvandlat den till en JWT)
-2. F5 VS2 APM:s JWT innehåller ett löpnummer (6 siffror) som identifierar usern
-3. F5 VS1 byter ut JWT:n mot ett Keycloak-utfärdat token — berikat med namn, e-post, telefon och roller från KC
-4. Backenden litar enbart på KC och validerar det utfärdade tokenet mot KC:s JWKS
+1. En extern IdP utfärdar en SAML-assert
+2. F5 VS2 APM översätter SAML-asserten till en signerad JWT med användarens löpnummer (6 siffror)
+3. F5 VS1 skickar JWT:n till Keycloak för token exchange
+4. KC anropar VS2 APM:s `/userinfo` med JWT:n som Bearer — VS2 validerar sin egna signatur och returnerar `sub`
+5. KC berikar med namn, e-post, telefon och roller och utfärdar ett KC-signerat token
+6. Backenden litar enbart på KC och validerar mot KC:s JWKS
 
 ---
 
@@ -56,8 +58,9 @@ sequenceDiagram
     Note over KC: 2. Kontrollerar IDP-behörighet i realm-management
 
     KC->>VS2: GET /userinfo Bearer VS2-JWT
-    Note over VS2: Verifierar RS256-signatur
+    Note over VS2: F5 APM validerar sin egna JWT-signatur
     Note over VS2: Kontrollerar exp och iss
+    Note over VS2: Returnerar sub ur JWT-payloaden
     VS2-->>KC: sub=123456
 
     Note over KC: 3. Slår upp KC-user via federated identity
@@ -238,15 +241,17 @@ python scripts/verify_rejection.py
 
 ---
 
-## JWKS-servern (VS2-simulering)
+## JWKS-servern (simulerar F5 VS2 APM:s OIDC-lager)
 
 `jwks_server/server.py` exponerar:
 
 | Endpoint | Beskrivning |
 |---|---|
 | `GET /jwks` | JWKS med RSA-publik nyckel (`kid: vs2-key-1`) |
-| `GET /userinfo` | Verifierar JWT-signatur + `iss` + `exp`, returnerar `sub` |
+| `GET/POST /userinfo` | Tar emot JWT som Bearer, verifierar signatur + `iss` + `exp`, returnerar `sub` |
 | `GET /health` | Hälsokontroll |
+
+**Varför UserInfo?** KC:s OIDC IDP skickar alltid det inkommande tokenet till `/userinfo` för validering — det är en del av OIDC-protokollet. F5 APM har inbyggt stöd för detta. APM:n behöver ingen separat user store: den validerar sin egna JWT-signatur och läser `sub` direkt ur payloaden.
 
 ---
 
@@ -287,7 +292,7 @@ open http://localhost:8080   # admin / admin
 | `Connection refused` på 8080 | Keycloak inte startad | Vänta, kolla `docker compose logs keycloak` |
 | `403 Client not allowed to exchange` | IDP- eller audience-behörighet saknas | Kör `setup_permissions.py` |
 | `400 token type not supported` | `subject_token_type: jwt` används | Byt till `access_token` — KC 25 stöder bara UserInfo-flödet |
-| `400 user info service disabled` | IDP saknar UserInfo-URL | Kontrollera `setup_keycloak.py` IDP-konfiguration |
+| `400 user info service disabled` | IDP saknar UserInfo-URL eller har `disableUserInfoService: true` | Kontrollera att `userInfoUrl` är satt i `setup_keycloak.py` |
 | `400 invalid_token` | VS2 avvisar signaturen | Kontrollera `docker compose logs jwks-server` |
 | Saknade claims i token | Mappers inte i inbyggda scopes | KC 25 token exchange evaluerar bara realm-default scopes — mappers måste ligga i `profile`/`roles`-scope |
 

@@ -1,18 +1,23 @@
 """
-JWKS Server — simulerar VS2 APM:s publika nyckelendpoint.
+JWKS Server — simulerar F5 APM / VS2:s OIDC-lager.
 
-KC 26 token-exchange:v2 validerar JWT-signaturen direkt mot denna JWKS-endpoint.
-Ingen UserInfo-endpoint behövs — VS2 är en token translator, inte en IdP med user store.
+KC anropar /userinfo under token exchange med VS2-JWT:n som Bearer.
+F5 APM (denna server) validerar sin egna signatur och returnerar sub.
+KC behöver ingen separat user store — claims läses ur JWT:n direkt.
 
 Exponerar:
-  GET /jwks    — JWKS med RSA-publik nyckel (kid: vs2-key-1)
-  GET /health  — hälsokontroll
+  GET  /jwks      — JWKS med RSA-publik nyckel (kid: vs2-key-1)
+  GET  /userinfo  — Tar emot JWT som Bearer, validerar, returnerar sub
+  POST /userinfo  — (KC kan använda POST beroende på konfiguration)
+  GET  /health    — hälsokontroll
 """
 
 import base64
+import json
 import os
+import time
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
@@ -52,6 +57,54 @@ def jwks():
         return jsonify(build_jwks())
     except FileNotFoundError:
         return jsonify({"error": "Public key not found. Run generate_keys.py first."}), 503
+
+
+@app.route("/userinfo", methods=["GET", "POST"])
+def userinfo():
+    """
+    KC anropar denna endpoint under token exchange med VS2-JWT:n som Bearer.
+
+    F5 APM-beteende: validera signaturen på det egna tokenet och returnera
+    claims ur payloaden. Ingen separat user store behövs.
+    """
+    from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.exceptions import InvalidSignature
+
+    auth = request.headers.get("Authorization", "")
+    if not auth.lower().startswith("bearer "):
+        return jsonify({"error": "unauthorized"}), 401
+    token = auth[7:]
+
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            raise ValueError("not a JWT")
+        header_b64, payload_b64, sig_b64 = parts
+
+        padded_payload = payload_b64 + "=" * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded_payload))
+
+        signing_input = f"{header_b64}.{payload_b64}".encode()
+        sig_bytes = base64.urlsafe_b64decode(sig_b64 + "==")
+        with open(KEY_PATH, "rb") as f:
+            pub_key = load_pem_public_key(f.read())
+        pub_key.verify(sig_bytes, signing_input, asym_padding.PKCS1v15(), hashes.SHA256())
+
+        if payload.get("exp", 0) < time.time():
+            return jsonify({"error": "token_expired"}), 401
+
+        expected_issuer = os.environ.get("JWT_ISSUER", "http://localhost:9000")
+        if payload.get("iss") != expected_issuer:
+            return jsonify({"error": "invalid_issuer"}), 401
+
+    except (InvalidSignature, ValueError, Exception):
+        return jsonify({"error": "invalid_token"}), 401
+
+    return jsonify({
+        "sub": payload.get("sub", "unknown"),
+        "preferred_username": payload.get("sub", "unknown"),
+    })
 
 
 @app.route("/health", methods=["GET"])

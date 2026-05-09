@@ -1,8 +1,8 @@
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:26.1
+    image: quay.io/keycloak/keycloak:26.6.1
     container_name: keycloak
-    command: start-dev --features=token-exchange:v2,admin-fine-grained-authz:v1 --health-enabled=true
+    command: start-dev --features=token-exchange:v1,admin-fine-grained-authz:v1 --health-enabled=true
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin

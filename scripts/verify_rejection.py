@@ -49,7 +49,7 @@ def do_exchange(subject_token: str, client_secret: str = CLIENT_SECRET) -> tuple
         "client_id": CLIENT_ID,
         "client_secret": client_secret,
         "subject_token": subject_token,
-        "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+        "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
         "subject_issuer": "vs2-idp",
         "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
         "audience": TARGET_AUDIENCE,

@@ -146,9 +146,10 @@ def create_idp(token: str):
             "useJwksUrl": "true",
             "clientAuthMethod": "client_secret_post",
             "syncMode": "FORCE",
-            # KC 26 token-exchange:v2 validerar JWT-signaturen direkt mot JWKS.
-            # UserInfo behövs inte — VS2 är en token translator, inte en IdP med user store.
-            "disableUserInfoService": "true",
+            # KC anropar /userinfo med JWT:n som Bearer. F5 APM/VS2 validerar
+            # sin egna signatur och returnerar sub. KC behöver ingen separat user store.
+            "userInfoUrl": "http://jwks-server:9000/userinfo",
+            "disableUserInfoService": "false",
         },
     }
     status, resp = http(
