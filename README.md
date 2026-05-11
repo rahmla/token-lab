@@ -1,11 +1,11 @@
-# Token Exchange Lab — RFC 8693 med Keycloak 25
+# Token Exchange Lab — RFC 8693 med Keycloak 26.6
 
-Lokal labbmiljö som simulerar ett **F5-scenario** med extern Token Exchange (RFC 8693):
+Lokal labbmiljö som simulerar extern Token Exchange (RFC 8693):
 
 1. En extern IdP utfärdar en SAML-assert
-2. F5 VS2 APM översätter SAML-asserten till en signerad JWT med användarens löpnummer (6 siffror)
-3. F5 VS1 skickar JWT:n till Keycloak för token exchange
-4. KC anropar VS2 APM:s `/userinfo` med JWT:n som Bearer — VS2 validerar sin egna signatur och returnerar `sub`
+2. VS2 översätter SAML-asserten till en signerad JWT med användarens löpnummer (6 siffror)
+3. VS1 skickar JWT:n till Keycloak för token exchange
+4. KC anropar VS2:s `/userinfo` med JWT:n som Bearer — VS2 validerar sin egna signatur och returnerar `sub`
 5. KC berikar med namn, e-post, telefon och roller och utfärdar ett KC-signerat token
 6. Backenden litar enbart på KC och validerar mot KC:s JWKS
 
@@ -24,7 +24,7 @@ Lokal labbmiljö som simulerar ett **F5-scenario** med extern Token Exchange (RF
 │         │                           │                            │
 │         └──────── Docker-nät ───────┘                            │
 │                        │                                         │
-│              Keycloak 25 :8080                                   │
+│              Keycloak 26.6 :8080                                  │
 │                Realm: token-lab                                   │
 │                IDP: vs2-idp (OIDC)                               │
 │                Klienter: vs1-client, vs2-resource                │
@@ -39,7 +39,7 @@ Lokal labbmiljö som simulerar ett **F5-scenario** med extern Token Exchange (RF
 ```mermaid
 sequenceDiagram
     participant VS2 as VS2 / extern IdP :9000
-    participant VS1 as VS1 F5 Resource Server
+    participant VS1 as VS1 Resource Server
     participant KC as Keycloak :8080
     participant BE as Backend
 
@@ -58,7 +58,7 @@ sequenceDiagram
     Note over KC: 2. Kontrollerar IDP-behörighet i realm-management
 
     KC->>VS2: GET /userinfo Bearer VS2-JWT
-    Note over VS2: F5 APM validerar sin egna JWT-signatur
+    Note over VS2: VS2 validerar sin egna JWT-signatur
     Note over VS2: Kontrollerar exp och iss
     Note over VS2: Returnerar sub ur JWT-payloaden
     VS2-->>KC: sub=123456
@@ -128,7 +128,7 @@ Om något av dessa misslyckas returnerar VS2 `401` och KC avvisar exchange med `
 
 ### Behörighetsmodellen i KC 25
 
-Keycloak 25 med `admin-fine-grained-authz` hanterar **båda** token exchange-behörigheterna via **`realm-management`-klientens** authz-server:
+Keycloak 26 med `admin-fine-grained-authz` hanterar **båda** token exchange-behörigheterna via **`realm-management`-klientens** authz-server:
 
 ```
 realm-management authz-server
@@ -200,7 +200,7 @@ docker compose up -d --build
 
 | Tjänst | Port | Beskrivning |
 |---|---|---|
-| Keycloak 25.0 | 8080 | Features: `token-exchange:v1`, `admin-fine-grained-authz:v1` |
+| Keycloak 26.6.1 | 8080 | Features: `token-exchange:v1`, `admin-fine-grained-authz:v1` |
 | JWKS-server | 9000 | Flask: `/jwks`, `/userinfo`, `/health` |
 
 ### 3 — Konfigurera Keycloak
@@ -241,7 +241,7 @@ python scripts/verify_rejection.py
 
 ---
 
-## JWKS-servern (simulerar F5 VS2 APM:s OIDC-lager)
+## JWKS-servern (simulerar VS2:s OIDC-lager)
 
 `jwks_server/server.py` exponerar:
 
@@ -251,7 +251,7 @@ python scripts/verify_rejection.py
 | `GET/POST /userinfo` | Tar emot JWT som Bearer, verifierar signatur + `iss` + `exp`, returnerar `sub` |
 | `GET /health` | Hälsokontroll |
 
-**Varför UserInfo?** KC:s OIDC IDP skickar alltid det inkommande tokenet till `/userinfo` för validering — det är en del av OIDC-protokollet. F5 APM har inbyggt stöd för detta. APM:n behöver ingen separat user store: den validerar sin egna JWT-signatur och läser `sub` direkt ur payloaden.
+**Varför UserInfo?** KC:s OIDC IDP skickar alltid det inkommande tokenet till `/userinfo` för validering — det är en del av OIDC-protokollet. VS2 behöver ingen separat user store: den validerar sin egna JWT-signatur och läser `sub` direkt ur payloaden.
 
 ---
 
@@ -313,20 +313,20 @@ rm -f keys/private_key.pem keys/public_key.pem
 
 ```
 token-lab/
-├── docker-compose.yml           # Keycloak 25 + JWKS-server
+├── docker-compose.yml           # Keycloak 26.6 + JWKS-server
 ├── run_lab.sh                   # Kör hela labbet i ett steg (7 steg)
 ├── keys/
 │   ├── private_key.pem          # RS256-privat nyckel (genereras, ej i git)
 │   └── public_key.pem           # Motsvarande publik nyckel (genereras, ej i git)
 ├── jwks_server/
 │   ├── Dockerfile
-│   └── server.py                # JWKS + UserInfo Flask-app (simulerar VS2 APM)
+│   └── server.py                # JWKS + UserInfo Flask-app (simulerar VS2)
 └── scripts/
     ├── generate_keys.py          # Genererar RSA-nyckelpar
     ├── setup_keycloak.py         # Skapar realm, IDP, klienter
     ├── setup_permissions.py      # Token Exchange-behörigheter (IDP + audience)
     ├── setup_user.py             # Skapar KC-user med attribut, roll, federated identity
-    ├── issue_token.py            # Utfärdar VS2-JWT (simulerar VS2 APM)
+    ├── issue_token.py            # Utfärdar VS2-JWT (simulerar VS2)
     ├── exchange_token.py         # Kör Token Exchange (simulerar VS1)
     ├── demo.py                   # Interaktiv demo — alla 4 steg + backend-vy
     └── verify_rejection.py       # Verifierar att ogiltiga tokens avvisas (5 testfall)
